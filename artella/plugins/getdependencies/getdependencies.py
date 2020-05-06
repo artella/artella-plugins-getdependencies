@@ -18,7 +18,7 @@ from artella.core import plugin, utils
 
 class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
 
-    ID = 'artellapipe-plugins-getdependencies'
+    ID = 'artella-plugins-getdependencies'
     INDEX = 2
 
     def __init__(self, config_dict=None, manager=None):
@@ -155,6 +155,41 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
             artella.DccPlugin().update_paths(files_to_update, show_dialogs=show_dialogs, call_post_function=False)
 
         self._post_get_dependencies()
+
+    def get_non_available_dependencies(self, file_path=None):
+        """
+        Returns all dependency files that are not in the local machine of the user.
+
+        :param str or None file_path: Absolute local file path we want to get non available dependencies of. If not
+            given, current DCC scene file will be used.
+        :return: List of non available dependencies for the given file.
+        :rtype: list(str)
+        """
+
+        non_available_deps = list()
+
+        artella_drive_client = artella.DccPlugin().get_client()
+        if not artella_drive_client:
+            return non_available_deps
+
+        if not file_path:
+            file_path = dcc.scene_name()
+        if not file_path or not os.path.isfile(file_path):
+            logger.log_warning(
+                'Unable to get available non available dependencies. Given scene file does not exists!'.format(
+                    file_path))
+            return non_available_deps
+
+        parser = artella.Parser()
+        deps_file_paths = parser.parse(file_path) or list()
+        if not deps_file_paths:
+            return non_available_deps
+
+        for dep_file_path in deps_file_paths:
+            if dep_file_path and not os.path.isfile(dep_file_path):
+                non_available_deps.append(dep_file_path)
+
+        return non_available_deps
 
     def _post_get_dependencies(self, **kwargs):
         """
