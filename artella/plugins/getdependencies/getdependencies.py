@@ -89,6 +89,9 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
 
             return found_files
 
+        if not self.is_loaded():
+            return
+
         artella_drive_client = artella.DccPlugin().get_client()
         if not artella_drive_client:
             return False
