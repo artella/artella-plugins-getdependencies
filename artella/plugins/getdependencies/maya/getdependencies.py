@@ -2,12 +2,12 @@
 # -*- coding: utf-8 -*-
 
 """
-Module that contains Artella Get Dependencies plugin implementation
+Module that contains Artella Get Dependencies plugin implementation for Maya
 """
 
 from __future__ import print_function, division, absolute_import
 
-from artella.dcc.maya import utils as maya_utils
+from artella.dccs.maya import utils as maya_utils
 from artella.plugins.getdependencies import getdependencies
 
 
