@@ -9,11 +9,13 @@ from __future__ import print_function, division, absolute_import
 
 import os
 import time
+import logging
 
 import artella
-from artella import dcc
-from artella import logger
+import artella.dcc as dcc
 from artella.core import plugin, utils, qtutils, splash
+
+logger = logging.getLogger('artella')
 
 
 class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
@@ -52,7 +54,7 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
             deps_file_path = utils.clean_path(deps_file_path)
             local_path = artella_drive_client.translate_path(deps_file_path)
 
-            logger.log_info('Getting Dependencies: {}'.format(local_path))
+            logger.info('Getting Dependencies: {}'.format(local_path))
             found_files.setdefault(parent_path, list())
             if local_path not in found_files[parent_path]:
                 found_files[parent_path].append(local_path)
@@ -60,7 +62,7 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
             if not os.path.isfile(local_path):
                 artella.DccPlugin().download_file(local_path)
                 if not os.path.isfile(local_path):
-                    logger.log_warning('Impossible to retrieve following dependency: {}!'.format(local_path))
+                    logger.warning('Impossible to retrieve following dependency: {}!'.format(local_path))
                     found_files[parent_path].pop(found_files[parent_path].index(local_path))
                     return None
             else:
@@ -103,13 +105,13 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
                 if show_dialogs:
                     artella.DccPlugin().show_warning_message(text=msg, title='Failed to get dependencies')
                 else:
-                    logger.log_warning(msg)
+                    logger.warning(msg)
                 return res
 
         file_path = utils.clean_path(file_path)
         depend_file_paths = _get_dependencies(file_path) or list()
         if not depend_file_paths:
-            logger.log_warning('No dependencies files found in "{}"'.format(file_path))
+            logger.warning('No dependencies files found in "{}"'.format(file_path))
             return res
         else:
             res = depend_file_paths
