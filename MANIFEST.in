@@ -1,0 +1,5 @@
+include versioneer.py
+include artella-plugin.json
+include artella/plugins/getdependencies/_version.py
+recursive-include artella/plugins/getdependencies/resources/* *.*
+recursive-exclude * *.py[co]
