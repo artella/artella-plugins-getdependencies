@@ -1,14 +1,13 @@
 {
     "dcc": ["maya"],
-    "icon": "",
     "menu": {
         "id": "artella-plugins-getdependencies",
         "command": "import artella; plug = artella.PluginsMgr().get_plugin_by_id('artella-plugins-getdependencies'); plug.get_dependencies()",
         "tags": ["artella", "get", "dependencies"],
-        "label": "Get Dependencies",
-        "icon": ""
+        "label": "Get Dependencies"
     },
     "name": "Get Dependencies",
     "package": "Artella",
-    "resources": "resources"
+    "resources": "resources",
+    "icon": "getdependencies.png"
 }
