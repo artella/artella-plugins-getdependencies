@@ -231,9 +231,9 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
         :return: True if the user acceps the operation; False otherwise
         """
 
-        from artella.plugins.getdependencies import widgets
+        from artella.plugins.getdependencies.widgets import listdialog
 
-        deps_dialog = widgets.DependenciesListDialog()
+        deps_dialog = listdialog.DependenciesListDialog()
         title = 'Artella - Missing dependency' if len(deps) <= 1 else 'Artella - Missing dependencies'
         deps_dialog.setWindowTitle(title)
         deps_dialog.set_dependencies(deps)
@@ -245,9 +245,9 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
         if not deps_list:
             return
 
-        from artella.plugins.getdependencies import widgets
+        from artella.plugins.getdependencies.widgets import outputdialog
 
-        deps_dialog = widgets.DependenciesOutputDialog()
+        deps_dialog = outputdialog.DependenciesOutputDialog()
         for dep in deps_list:
             for dep_parent_path, dep_paths in dep.items():
                 if dep_paths:
