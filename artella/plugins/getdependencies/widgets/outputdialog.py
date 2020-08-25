@@ -32,7 +32,7 @@ class DependenciesOutputDialog(artella.Dialog, object):
 
         self.setWindowTitle('Get Dependencies Result')
 
-        deps_lbl = QtWidgets.QLabel('Following dependencies have been retrieved: ')
+        deps_lbl = QtWidgets.QLabel('Attempting to retrieve the following dependencies: ')
         self._deps_tree = QtWidgets.QTreeWidget()
         self._deps_tree.setHeaderLabels(['Dependency Path'])
 
