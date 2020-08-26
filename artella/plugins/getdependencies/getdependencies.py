@@ -133,6 +133,7 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
         # is being processed
         time.sleep(1.0)
 
+        valid_download = True
         if show_dialogs:
             if qtutils.QT_AVAILABLE:
                 dcc_progress_bar = splash.ProgressSplashDialog()
@@ -143,6 +144,7 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
         while True:
             if show_dialogs and dcc_progress_bar.is_cancelled():
                 artella_drive_client.pause_downloads()
+                valid_download = False
                 break
             progress, fd, ft, bd, bt = artella_drive_client.get_progress()
             progress_status = '{} of {} KiB downloaded\n{} of {} files downloaded'.format(
@@ -151,6 +153,17 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
                 dcc_progress_bar.set_progress_value(value=progress, status=progress_status)
             if progress >= 100 or bd == bt:
                 break
+
+        total_checks = 0
+        if valid_download:
+            missing_file = False
+            for local_file_path in files_to_download:
+                if not os.path.exists(local_file_path):
+                    missing_file = True
+                    break
+            while missing_file and total_checks < 5:
+                time.sleep(1.0)
+                total_checks += 1
 
         if show_dialogs:
             dcc_progress_bar.end()
