@@ -47,7 +47,7 @@ class DependenciesListDialog(artella.Dialog, object):
         cbx_lyt = QtWidgets.QHBoxLayout()
         deps2_lbl = QtWidgets.QLabel('Would you like to download all missing files?')
         self._recursive_cbx = QtWidgets.QCheckBox('Recursive?')
-        self._recursive_cbx.setChecked(False)
+        self._recursive_cbx.setChecked(True)
         cbx_lyt.addWidget(deps2_lbl)
         cbx_lyt.addStretch()
         cbx_lyt.addWidget(self._recursive_cbx)
