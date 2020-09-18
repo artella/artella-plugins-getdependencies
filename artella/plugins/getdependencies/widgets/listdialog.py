@@ -11,7 +11,7 @@ import artella
 from artella.core import qtutils
 
 if qtutils.QT_AVAILABLE:
-    from artella.externals.Qt import QtCore, QtWidgets
+    from artella.externals.Qt import QtCore, QtWidgets, QtGui
 
 
 class DependenciesListDialog(artella.Dialog, object):
@@ -47,10 +47,28 @@ class DependenciesListDialog(artella.Dialog, object):
         cbx_lyt = QtWidgets.QHBoxLayout()
         deps2_lbl = QtWidgets.QLabel('Would you like to download all missing files?')
         self._recursive_cbx = QtWidgets.QCheckBox('Recursive?')
-        self._recursive_cbx.setChecked(True)
+        self._recursive_cbx.setChecked(False)
         cbx_lyt.addWidget(deps2_lbl)
         cbx_lyt.addStretch()
         cbx_lyt.addWidget(self._recursive_cbx)
+
+        self._warning_frame = QtWidgets.QFrame()
+        self._warning_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        self._warning_frame.setFrameShadow(QtWidgets.QFrame.Sunken)
+        warning_layout = QtWidgets.QHBoxLayout()
+        warning_layout.setSpacing(2)
+        warning_layout.setContentsMargins(0, 0, 0, 0)
+        self._warning_frame.setLayout(warning_layout)
+        warning_icon = QtWidgets.QLabel()
+        icon_pixmap = (artella.ResourcesMgr().pixmap('warning') or QtGui.QPixmap()).scaled(
+            QtCore.QSize(30, 30), QtCore.Qt.KeepAspectRatio, transformMode=QtCore.Qt.SmoothTransformation)
+        warning_message = QtWidgets.QLabel(
+            'Recursive Get Dependencies can take quite a lot of time when working with big scenes!')
+        warning_icon.setPixmap(icon_pixmap)
+        warning_layout.addWidget(warning_icon)
+        warning_layout.addWidget(warning_message)
+        self._warning_frame.setVisible(False)
+
         buttons_layout = QtWidgets.QHBoxLayout()
         self._yes_btn = QtWidgets.QPushButton('Yes')
         self._no_btn = QtWidgets.QPushButton('No')
@@ -60,10 +78,12 @@ class DependenciesListDialog(artella.Dialog, object):
         self.main_layout.addWidget(deps_lbl)
         self.main_layout.addWidget(self._deps_list)
         self.main_layout.addLayout(cbx_lyt)
+        self.main_layout.addWidget(self._warning_frame)
         self.main_layout.addLayout(buttons_layout)
 
         self._yes_btn.clicked.connect(self._on_ok)
         self._no_btn.clicked.connect(self._on_cancel)
+        self._recursive_cbx.toggled.connect(self._on_toggle_check)
 
         self.resize(QtCore.QSize(350, 350))
 
@@ -87,3 +107,6 @@ class DependenciesListDialog(artella.Dialog, object):
         self._do_recursive = True
         self._recursive_cbx.setChecked(self._do_recursive)
         self.fade_close()
+
+    def _on_toggle_check(self, flag):
+        self._warning_frame.setVisible(flag)
