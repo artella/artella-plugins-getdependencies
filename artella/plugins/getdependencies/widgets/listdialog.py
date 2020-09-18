@@ -67,7 +67,7 @@ class DependenciesListDialog(artella.Dialog, object):
         warning_icon.setPixmap(icon_pixmap)
         warning_layout.addWidget(warning_icon)
         warning_layout.addWidget(warning_message)
-        self._warning_frame.setVisible(False)
+        self._warning_frame.setVisible(self._recursive_cbx.isChecked())
 
         buttons_layout = QtWidgets.QHBoxLayout()
         self._yes_btn = QtWidgets.QPushButton('Yes')
