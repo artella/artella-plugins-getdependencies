@@ -21,5 +21,7 @@ class GetDependenciesMayaPlugin(getdependencies.GetDependenciesPlugin, object):
         plugins.
         """
 
-        maya_utils.reload_textures()
-        maya_utils.reload_dependencies()
+        files_updated = kwargs.get('files_updated', list())
+
+        maya_utils.reload_textures(files_updated)
+        maya_utils.reload_dependencies(files_updated)

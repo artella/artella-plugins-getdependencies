@@ -26,6 +26,7 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
     def __init__(self, config_dict=None, manager=None):
         super(GetDependenciesPlugin, self).__init__(config_dict=config_dict, manager=manager)
 
+    @utils.timestamp
     def get_dependencies(self, file_path=None, recursive=True, update_paths=False, show_dialogs=True):
         """
         Returns all dependency files of the given file path and downloads to the latest available version those files
@@ -172,7 +173,8 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
             files_to_update = list(set(files_to_update))
             artella.DccPlugin().update_paths(files_to_update, show_dialogs=show_dialogs, call_post_function=False)
 
-        self._post_get_dependencies()
+        files_updated = [path for path in files_to_download if path and os.path.isfile(path)]
+        self._post_get_dependencies(files_updated=files_updated)
 
         artella.DccPlugin().show_success_message(
             'Get Dependencies operation was successful!', title='Get Depedendencies')
