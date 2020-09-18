@@ -128,46 +128,8 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
                     if not file_status or not file_status[0]:
                         continue
                     files_to_download.append(pth)
-        artella_drive_client.download(files_to_download)
 
-        # We force the waiting to a high value, otherwise Artella Drive Client will return that no download
-        # is being processed
-        time.sleep(1.0)
-
-        valid_download = True
-        if show_dialogs:
-            if qtutils.QT_AVAILABLE:
-                dcc_progress_bar = splash.ProgressSplashDialog()
-            else:
-                dcc_progress_bar = artella.ProgressBar()
-
-            dcc_progress_bar.start()
-        while True:
-            if show_dialogs and dcc_progress_bar.is_cancelled():
-                artella_drive_client.pause_downloads()
-                valid_download = False
-                break
-            progress, fd, ft, bd, bt = artella_drive_client.get_progress()
-            progress_status = '{} of {} KiB downloaded\n{} of {} files downloaded'.format(
-                int(bd / 1024), int(bt / 1024), fd, ft)
-            if show_dialogs:
-                dcc_progress_bar.set_progress_value(value=progress, status=progress_status)
-            if progress >= 100 or bd == bt:
-                break
-
-        total_checks = 0
-        if valid_download:
-            missing_file = False
-            for local_file_path in files_to_download:
-                if not os.path.exists(local_file_path):
-                    missing_file = True
-                    break
-            while missing_file and total_checks < 5:
-                time.sleep(1.0)
-                total_checks += 1
-
-        if show_dialogs:
-            dcc_progress_bar.end()
+        self._download_files(files_to_download, show_dialogs=show_dialogs)
 
         if update_paths:
             files_to_update = list(set(files_to_update))
@@ -230,12 +192,18 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
             if show_dialogs:
                 get_deps, recursive = self._show_get_deps_dialog(deps=non_available_deps)
             if get_deps:
-                for non_available_dep in non_available_deps:
-                    deps = self.get_dependencies(
-                        non_available_dep, recursive=recursive, update_paths=False, show_dialogs=show_dialogs)
-                    if deps:
-                        deps_retrieved.append(deps)
-                    else:
+                if recursive:
+                    for non_available_dep in non_available_deps:
+                        deps = self.get_dependencies(
+                            non_available_dep, recursive=recursive, update_paths=False, show_dialogs=show_dialogs)
+                        if deps:
+                            deps_retrieved.append(deps)
+                        else:
+                            deps_retrieved.append({non_available_dep: []})
+                else:
+                    deps_retrieved = list()
+                    self._download_files(non_available_deps, show_dialogs=show_dialogs)
+                    for non_available_dep in non_available_deps:
                         deps_retrieved.append({non_available_dep: []})
 
         if show_dialogs:
@@ -276,6 +244,53 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
                 else:
                     deps_dialog.add_dependency(dep_parent_path, None)
         deps_dialog.show()
+
+    def _download_files(self, files_to_download, show_dialogs=True):
+
+        artella_drive_client = artella.DccPlugin().get_client()
+        if not artella_drive_client or not artella_drive_client.check(update=True):
+            return
+
+        artella_drive_client.download(files_to_download)
+
+        # We force the waiting to a high value, otherwise Artella Drive Client will return that no download
+        # is being processed
+        time.sleep(1.0)
+
+        valid_download = True
+        if show_dialogs:
+            if qtutils.QT_AVAILABLE:
+                dcc_progress_bar = splash.ProgressSplashDialog()
+            else:
+                dcc_progress_bar = artella.ProgressBar()
+
+            dcc_progress_bar.start()
+        while True:
+            if show_dialogs and dcc_progress_bar.is_cancelled():
+                artella_drive_client.pause_downloads()
+                valid_download = False
+                break
+            progress, fd, ft, bd, bt = artella_drive_client.get_progress()
+            progress_status = '{} of {} KiB downloaded\n{} of {} files downloaded'.format(
+                int(bd / 1024), int(bt / 1024), fd, ft)
+            if show_dialogs:
+                dcc_progress_bar.set_progress_value(value=progress, status=progress_status)
+            if progress >= 100 or bd == bt:
+                break
+
+        total_checks = 0
+        if valid_download:
+            missing_file = False
+            for local_file_path in files_to_download:
+                if not os.path.exists(local_file_path):
+                    missing_file = True
+                    break
+            while missing_file and total_checks < 5:
+                time.sleep(1.0)
+                total_checks += 1
+
+        if show_dialogs:
+            dcc_progress_bar.end()
 
     def _post_get_dependencies(self, **kwargs):
         """
