@@ -2,7 +2,7 @@
     "dcc": ["maya"],
     "menu": {
         "id": "artella-plugins-getdependencies",
-        "command": "import artella; plug = artella.PluginsMgr().get_plugin_by_id('artella-plugins-getdependencies'); plug.get_non_available_dependencies()",
+        "command": "import artella; plug = artella.PluginsMgr().get_plugin_by_id('artella-plugins-getdependencies'); plug.get_dependencies()",
         "tags": ["artella", "get", "dependencies"],
         "label": "Get Dependencies"
     },
