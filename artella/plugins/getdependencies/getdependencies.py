@@ -214,6 +214,11 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
         for dep_file_path in deps_file_paths:
             translated_path = artella.DccPlugin().translate_path(dep_file_path)
             if translated_path and not os.path.isfile(translated_path):
+                if os.path.isdir(translated_path):
+                    continue
+                file_ext = os.path.splitext(translated_path)
+                if not file_ext[-1]:
+                    continue
                 non_available_deps.append(translated_path)
 
         deps_retrieved = list()
