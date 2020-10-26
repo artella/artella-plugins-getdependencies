@@ -169,19 +169,63 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
             return non_available_deps
 
         parser = artella.Parser()
-        deps_file_paths = parser.parse(file_path) or list()
+        deps_file_paths = parser.parse(file_path, show_dialogs=False) or list()
+
         if not deps_file_paths:
             return non_available_deps
 
+        remote_path_files = dict()
+
         for dep_file_path in deps_file_paths:
-            translated_path = artella.DccPlugin().translate_path(dep_file_path)
-            if translated_path and not os.path.isfile(translated_path):
-                if os.path.isdir(translated_path):
-                    continue
-                file_ext = os.path.splitext(translated_path)
-                if not file_ext[-1]:
-                    continue
-                non_available_deps.append(translated_path)
+            if dcc.is_udim_path(dep_file_path):
+                folder_directory = os.path.dirname(dep_file_path)
+                dep_file_name, dep_file_ext = os.path.splitext(os.path.basename(dep_file_path))
+                dep_file_parts = dep_file_name.split('_')
+                if folder_directory not in remote_path_files:
+                    directory_info = artella_drive_client.status(folder_directory, include_remote=True) or None
+                    if not directory_info:
+                        remote_path_files[folder_directory] = list()
+                    else:
+                        directory_info = directory_info[0]
+                        for handle, data in directory_info.items():
+                            remote_info = data.get('remote_info', dict())
+                            remote_path_files.setdefault(folder_directory, list())
+                            is_file = remote_info.get('raw', dict()).get('type', None) == 'file'
+                            name = remote_info.get('name', None)
+                            if is_file and name:
+                                remote_path_files[folder_directory].append(name)
+                if folder_directory in remote_path_files:
+                    for directory_path, file_names in remote_path_files.items():
+                        if not file_names:
+                            continue
+                        for file_name in file_names:
+                            valid = True
+                            file_parts = file_name.split('_')
+                            for dep_part, file_part in zip(dep_file_parts, file_parts):
+                                if dep_part == '<UDIM>':
+                                    continue
+                                if dep_part != file_part:
+                                    valid = False
+                                    break
+                            if valid:
+                                udim_file_path = os.path.join(directory_path, file_name)
+                                translated_path = artella.DccPlugin().translate_path(udim_file_path)
+                                if translated_path and not os.path.isfile(translated_path):
+                                    if os.path.isdir(translated_path):
+                                        continue
+                                    file_ext = os.path.splitext(translated_path)
+                                    if not file_ext[-1]:
+                                        continue
+                                    non_available_deps.append(translated_path)
+            else:
+                translated_path = artella.DccPlugin().translate_path(dep_file_path)
+                if translated_path and not os.path.isfile(translated_path):
+                    if os.path.isdir(translated_path):
+                        continue
+                    file_ext = os.path.splitext(translated_path)
+                    if not file_ext[-1]:
+                        continue
+                    non_available_deps.append(translated_path)
 
         deps_retrieved = list()
         if non_available_deps:
