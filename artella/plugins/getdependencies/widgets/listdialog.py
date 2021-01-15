@@ -7,8 +7,7 @@ Module that contains List Dialog Artella Get Dependencies widget implementation
 
 from __future__ import print_function, division, absolute_import
 
-import artella
-from artella.core import qtutils
+from artella.core import qtutils, resource
 
 if qtutils.QT_AVAILABLE:
     from artella.externals.Qt import QtCore, QtWidgets, QtGui
@@ -60,7 +59,7 @@ class DependenciesListDialog(artella.Dialog, object):
         warning_layout.setContentsMargins(0, 0, 0, 0)
         self._warning_frame.setLayout(warning_layout)
         warning_icon = QtWidgets.QLabel()
-        icon_pixmap = (artella.ResourcesMgr().pixmap('warning') or QtGui.QPixmap()).scaled(
+        icon_pixmap = (resource.pixmap('warning') or QtGui.QPixmap()).scaled(
             QtCore.QSize(30, 30), QtCore.Qt.KeepAspectRatio, transformMode=QtCore.Qt.SmoothTransformation)
         warning_message = QtWidgets.QLabel(
             'Recursive Get Dependencies can take quite a lot of time when working with big scenes!')

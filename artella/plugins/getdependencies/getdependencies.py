@@ -11,9 +11,9 @@ import os
 import time
 import logging
 
-import artella
-import artella.dcc as dcc
-from artella.core import plugin, utils, qtutils, splash
+from artella import dcc, api
+from artella.core.dcc import progress as dcc_progress
+from artella.core import plugin, utils, qtutils, splash, dccplugin
 
 logger = logging.getLogger('artella')
 
@@ -41,7 +41,7 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
 
         def _get_dependencies(deps_file_path, parent_path=None, found_files=None):
             """
-            Internal function that recursively all dependencies
+            Internal function that recursively get all dependencies
 
             :param deps_file_path:
             :param parent_path:
@@ -52,8 +52,11 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
             if found_files is None:
                 found_files = dict()
 
+            if not api.is_client_available(update=False):
+                return False
+
             deps_file_path = utils.clean_path(deps_file_path)
-            local_path = artella_drive_client.translate_path(deps_file_path)
+            local_path = api.translate_path(deps_file_path)
 
             logger.info('Getting Dependencies: {}'.format(local_path))
             found_files.setdefault(parent_path, list())
@@ -61,15 +64,15 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
                 found_files[parent_path].append(local_path)
 
             if not os.path.isfile(local_path):
-                artella.DccPlugin().download_file(local_path)
+                api.download_file(local_path)
                 if not os.path.isfile(local_path):
                     logger.warning('Impossible to retrieve following dependency: {}!'.format(local_path))
                     found_files[parent_path].pop(found_files[parent_path].index(local_path))
                     return None
             else:
-                is_latest_version = artella_drive_client.file_is_latest_version(local_path)
+                is_latest_version = api.file_is_latest_version(local_path)
                 if not is_latest_version:
-                    artella.DccPlugin().download_file(local_path)
+                    api.download_file(local_path)
 
             ext = os.path.splitext(local_path)[-1]
             if ext not in dcc.extensions():
@@ -81,7 +84,7 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
             if recursive:
                 for dep_file_path in deps_file_paths:
                     if not os.path.isabs(dep_file_path):
-                        dep_file_path = artella_drive_client.relative_path_to_absolute_path(dep_file_path)
+                        dep_file_path = api.relative_path_to_absolute_path(dep_file_path)
                     _get_dependencies(dep_file_path, parent_path=local_path, found_files=found_files)
             else:
                 for dep_file_path in deps_file_paths:
@@ -95,8 +98,7 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
         if not self.is_loaded():
             return res
 
-        artella_drive_client = artella.DccPlugin().get_client()
-        if not artella_drive_client or not artella_drive_client.check(update=True):
+        if not api.is_client_available(update=True):
             return res
 
         if not file_path:
@@ -104,7 +106,7 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
             if not file_path:
                 msg = 'Please open a file before getting dependencies.'
                 if show_dialogs:
-                    artella.DccPlugin().show_warning_message(text=msg, title='Failed to get dependencies')
+                    api.show_warning_message(text=msg, title='Failed to get dependencies')
                 else:
                     logger.warning(msg)
                 return res
@@ -124,7 +126,7 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
                 pth = utils.clean_path(pth)
                 files_to_update.append(pth)
                 if pth not in files_to_download:
-                    file_status = artella_drive_client.status(pth)
+                    file_status = api.file_status(pth)
                     if not file_status or not file_status[0]:
                         continue
                     files_to_download.append(pth)
@@ -133,13 +135,12 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
 
         if update_paths:
             files_to_update = list(set(files_to_update))
-            artella.DccPlugin().update_paths(files_to_update, show_dialogs=show_dialogs, call_post_function=False)
+            api.update_paths(files_to_update, show_dialogs=show_dialogs, call_post_function=False)
 
         files_updated = [path for path in files_to_download if path and os.path.isfile(path)]
         self._post_get_dependencies(files_updated=files_updated)
 
-        artella.DccPlugin().show_success_message(
-            'Get Dependencies operation was successful!', title='Get Depedendencies')
+        api.show_success_message('Get Dependencies operation was successful!', title='Get Depedendencies')
 
         return res
 
@@ -156,14 +157,13 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
 
         non_available_deps = list()
 
-        artella_drive_client = artella.DccPlugin().get_client()
-        if not artella_drive_client:
+        if not api.is_client_available():
             return non_available_deps
 
         if not file_path:
             file_path = dcc.scene_name()
         if not file_path or not os.path.isfile(file_path):
-            artella.DccPlugin().show_warning_message(
+            api.show_warning_message(
                 'Unable to get available non available dependencies. Given scene file does not exists!'.format(
                     file_path))
             return non_available_deps
@@ -182,7 +182,7 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
                 dep_file_name, dep_file_ext = os.path.splitext(os.path.basename(dep_file_path))
                 dep_file_parts = dep_file_name.split('_')
                 if folder_directory not in remote_path_files:
-                    directory_info = artella_drive_client.status(folder_directory, include_remote=True) or None
+                    directory_info = api.file_status(folder_directory, include_remote=True) or None
                     if not directory_info:
                         remote_path_files[folder_directory] = list()
                     else:
@@ -209,7 +209,7 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
                                     break
                             if valid:
                                 udim_file_path = os.path.join(directory_path, file_name)
-                                translated_path = artella.DccPlugin().translate_path(udim_file_path)
+                                translated_path = api.translate_path(udim_file_path)
                                 if translated_path and not os.path.isfile(translated_path):
                                     if os.path.isdir(translated_path):
                                         continue
@@ -218,7 +218,7 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
                                         continue
                                     non_available_deps.append(translated_path)
             else:
-                translated_path = artella.DccPlugin().translate_path(dep_file_path)
+                translated_path = api.translate_path(dep_file_path)
                 if translated_path and not os.path.isfile(translated_path):
                     if os.path.isdir(translated_path):
                         continue
@@ -229,7 +229,7 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
 
         deps_retrieved = list()
         if non_available_deps:
-            artella.DccPlugin().show_info_message(
+            api.show_info_message(
                 '{} Missing dependencies found.'.format(len(non_available_deps)), title='Artella - Get Dependencies')
             get_deps = True
             recursive = True
@@ -291,7 +291,7 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
 
     def _download_files(self, files_to_download, show_dialogs=True):
 
-        artella_drive_client = artella.DccPlugin().get_client()
+        artella_drive_client = dccplugin.DccPlugin().get_client()
         if not artella_drive_client or not artella_drive_client.check(update=True):
             return
 
@@ -302,13 +302,14 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
         time.sleep(1.0)
 
         valid_download = True
+        dcc_progress_bar = None
         if show_dialogs:
             if qtutils.QT_AVAILABLE:
                 dcc_progress_bar = splash.ProgressSplashDialog()
             else:
-                dcc_progress_bar = artella.ProgressBar()
-
+                dcc_progress_bar = dcc_progress.ProgressBar()
             dcc_progress_bar.start()
+
         while True:
             if show_dialogs and dcc_progress_bar.is_cancelled():
                 artella_drive_client.pause_downloads()
