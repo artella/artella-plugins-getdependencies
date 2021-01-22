@@ -7,13 +7,14 @@ Module that contains List Dialog Artella Get Dependencies widget implementation
 
 from __future__ import print_function, division, absolute_import
 
+from artella.core.dcc import dialog
 from artella.core import qtutils, resource
 
 if qtutils.QT_AVAILABLE:
     from artella.externals.Qt import QtCore, QtWidgets, QtGui
 
 
-class DependenciesListDialog(artella.Dialog, object):
+class DependenciesListDialog(dialog.Dialog(), object):
     def __init__(self, parent=None, **kwargs):
 
         self._do_sync = False
