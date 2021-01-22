@@ -9,14 +9,14 @@ from __future__ import print_function, division, absolute_import
 
 import os
 
-import artella
+from artella.core.dcc import dialog
 from artella.core import qtutils
 
 if qtutils.QT_AVAILABLE:
     from artella.externals.Qt import QtCore, QtWidgets, QtGui
 
 
-class DependenciesOutputDialog(artella.Dialog, object):
+class DependenciesOutputDialog(dialog.Dialog(), object):
     def __init__(self, parent=None, **kwargs):
         super(DependenciesOutputDialog, self).__init__(parent, **kwargs)
 
@@ -69,10 +69,13 @@ class DependenciesOutputDialog(artella.Dialog, object):
         else:
             parent_item = self._deps_tree.findItems(parent_path, QtCore.Qt.MatchExactly)
             if not parent_item:
-                self._deps_tree.addTopLevelItem(new_item)
+                parent_item = self.add_dependency(parent_path, None)
+                parent_item.addChild(new_item)
             else:
                 parent_item = parent_item[0]
                 parent_item.addChild(new_item)
+
+        return new_item
 
     def _on_ok(self):
         self.fade_close()
