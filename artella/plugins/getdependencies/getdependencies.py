@@ -8,12 +8,12 @@ Module that contains Artella Get Dependencies plugin implementation
 from __future__ import print_function, division, absolute_import
 
 import os
-import time
 import logging
 
 from artella import dcc, api
-from artella.core.dcc import progress as dcc_progress
-from artella.core import plugin, utils, qtutils, splash, dccplugin
+from artella.core.dcc import parser
+from artella.core import plugin, utils, downloader
+from artella.plugins.getdependencies.widgets import listdialog, outputdialog
 
 logger = logging.getLogger('artella')
 
@@ -39,110 +39,74 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
         :param bool show_dialogs: Whether UI dialogs should appear or not.
         """
 
-        def _get_dependencies(deps_file_path, parent_path=None, found_files=None):
-            """
-            Internal function that recursively get all dependencies
-
-            :param deps_file_path:
-            :param parent_path:
-            :param found_files:
-            :return:
-            """
-
-            if found_files is None:
-                found_files = dict()
-
-            if not api.is_client_available(update=False):
-                return False
-
-            deps_file_path = utils.clean_path(deps_file_path)
-            local_path = api.translate_path(deps_file_path)
-
-            logger.info('Getting Dependencies: {}'.format(local_path))
-            found_files.setdefault(parent_path, list())
-            if local_path not in found_files[parent_path]:
-                found_files[parent_path].append(local_path)
-
-            if not os.path.isfile(local_path):
-                api.download_file(local_path)
-                if not os.path.isfile(local_path):
-                    logger.warning('Impossible to retrieve following dependency: {}!'.format(local_path))
-                    found_files[parent_path].pop(found_files[parent_path].index(local_path))
-                    return None
-            else:
-                is_latest_version = api.file_is_latest_version(local_path)
-                if not is_latest_version:
-                    api.download_file(local_path)
-
-            ext = os.path.splitext(local_path)[-1]
-            if ext not in dcc.extensions():
-                return None
-
-            parser = artella.Parser()
-            deps_file_paths = parser.parse(local_path)
-
-            if recursive:
-                for dep_file_path in deps_file_paths:
-                    if not os.path.isabs(dep_file_path):
-                        dep_file_path = api.relative_path_to_absolute_path(dep_file_path)
-                    _get_dependencies(dep_file_path, parent_path=local_path, found_files=found_files)
-            else:
-                for dep_file_path in deps_file_paths:
-                    found_files.setdefault(local_path, list())
-                    found_files[local_path].append(dep_file_path)
-
-            return found_files
-
-        res = dict()
+        dependencies = dict()
 
         if not self.is_loaded():
-            return res
+            return dependencies
 
-        if not api.is_client_available(update=True):
-            return res
+        if not api.is_client_available():
+            return dependencies
 
-        if not file_path:
-            file_path = dcc.scene_name()
-            if not file_path:
+        file_paths = utils.force_list(file_path)
+        if not file_paths:
+            file_paths = [dcc.scene_name()]
+            if not file_paths:
                 msg = 'Please open a file before getting dependencies.'
                 if show_dialogs:
                     api.show_warning_message(text=msg, title='Failed to get dependencies')
                 else:
                     logger.warning(msg)
-                return res
+                return dependencies
 
-        file_path = utils.clean_path(file_path)
-        depend_file_paths = _get_dependencies(file_path) or list()
-        if not depend_file_paths:
-            logger.warning('No dependencies files found in "{}"'.format(file_path))
-            return res
-        else:
-            res = depend_file_paths
+        local_paths = list()
+        for file_path in file_paths:
+            if not file_path:
+                continue
+            file_path = utils.clean_path(file_path)
+            local_path = api.translate_path(file_path)
+            local_paths.append(local_path)
+        if not local_paths:
+            return dependencies
 
         files_to_download = list()
-        files_to_update = [file_path]
-        for file_paths_list in depend_file_paths.values():
-            for pth in file_paths_list:
-                pth = utils.clean_path(pth)
-                files_to_update.append(pth)
-                if pth not in files_to_download:
-                    file_status = api.file_status(pth)
-                    if not file_status or not file_status[0]:
-                        continue
-                    files_to_download.append(pth)
+        for file_path in local_paths:
+            if not os.path.isfile(file_path):
+                files_to_download.append(file_path)
+        if files_to_download:
+            dcc_downloader = downloader.Downloader()
+            dcc_downloader.download(files_to_download, show_dialogs=show_dialogs)
 
-        self._download_files(files_to_download, show_dialogs=show_dialogs)
+        valid_paths = list()
+        for path in local_paths:
+            file_ext = os.path.splitext(file_path)[-1]
+            if file_ext not in ('.ma', '.mb'):
+                continue
+            valid_paths.append(path)
+        if not valid_paths:
+            return dependencies
+
+        dcc_parser = parser.Parser()
+        base_dependencies = dcc_parser.parse(local_paths)
+        if not base_dependencies:
+            return dependencies
+
+        self._get_dependencies(base_dependencies, dependencies, show_dialogs=show_dialogs, recursive=recursive)
 
         if update_paths:
-            files_to_update = list(set(files_to_update))
+            files_to_update = list(set(dependencies))
             api.update_paths(files_to_update, show_dialogs=show_dialogs, call_post_function=False)
 
-        files_updated = [path for path in files_to_download if path and os.path.isfile(path)]
+        files_updated = list()
+        for dependencies_files in list(dependencies.values()):
+            for path in dependencies_files:
+                if not path or not os.path.isfile(path):
+                    continue
+                files_updated.append(path)
         self._post_get_dependencies(files_updated=files_updated)
 
-        api.show_success_message('Get Dependencies operation was successful!', title='Get Depedendencies')
+        api.show_success_message('Get Dependencies operation was successful!', title='Get Dependencies')
 
-        return res
+        return dependencies
 
     def get_non_available_dependencies(self, file_path=None, show_dialogs=True):
         """
@@ -157,6 +121,9 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
 
         non_available_deps = list()
 
+        if not self.is_loaded():
+            return non_available_deps
+
         if not api.is_client_available():
             return non_available_deps
 
@@ -168,64 +135,24 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
                     file_path))
             return non_available_deps
 
-        parser = artella.Parser()
-        deps_file_paths = parser.parse(file_path, show_dialogs=False) or list()
-
+        dcc_parser = parser.Parser()
+        deps_file_paths = dcc_parser.parse([file_path], show_dialogs=True) or dict()
         if not deps_file_paths:
             return non_available_deps
 
-        remote_path_files = dict()
-
-        for dep_file_path in deps_file_paths:
-            if dcc.is_udim_path(dep_file_path):
-                folder_directory = os.path.dirname(dep_file_path)
-                dep_file_name, dep_file_ext = os.path.splitext(os.path.basename(dep_file_path))
-                dep_file_parts = dep_file_name.split('_')
-                if folder_directory not in remote_path_files:
-                    directory_info = api.file_status(folder_directory, include_remote=True) or None
-                    if not directory_info:
-                        remote_path_files[folder_directory] = list()
-                    else:
-                        directory_info = directory_info[0]
-                        for handle, data in directory_info.items():
-                            remote_info = data.get('remote_info', dict())
-                            remote_path_files.setdefault(folder_directory, list())
-                            is_file = remote_info.get('raw', dict()).get('type', None) == 'file'
-                            name = remote_info.get('name', None)
-                            if is_file and name:
-                                remote_path_files[folder_directory].append(name)
-                if folder_directory in remote_path_files:
-                    for directory_path, file_names in remote_path_files.items():
-                        if not file_names:
+        for parent_path, dep_file_paths in deps_file_paths.items():
+            for dep_file_path in dep_file_paths:
+                if dcc.is_udim_path(dep_file_path):
+                    non_available_deps.append(self._get_path_from_udim(dep_file_path))
+                else:
+                    translated_path = api.translate_path(dep_file_path)
+                    if translated_path and not os.path.isfile(translated_path):
+                        if os.path.isdir(translated_path):
                             continue
-                        for file_name in file_names:
-                            valid = True
-                            file_parts = file_name.split('_')
-                            for dep_part, file_part in zip(dep_file_parts, file_parts):
-                                if dep_part == '<UDIM>':
-                                    continue
-                                if dep_part != file_part:
-                                    valid = False
-                                    break
-                            if valid:
-                                udim_file_path = os.path.join(directory_path, file_name)
-                                translated_path = api.translate_path(udim_file_path)
-                                if translated_path and not os.path.isfile(translated_path):
-                                    if os.path.isdir(translated_path):
-                                        continue
-                                    file_ext = os.path.splitext(translated_path)
-                                    if not file_ext[-1]:
-                                        continue
-                                    non_available_deps.append(translated_path)
-            else:
-                translated_path = api.translate_path(dep_file_path)
-                if translated_path and not os.path.isfile(translated_path):
-                    if os.path.isdir(translated_path):
-                        continue
-                    file_ext = os.path.splitext(translated_path)
-                    if not file_ext[-1]:
-                        continue
-                    non_available_deps.append(translated_path)
+                        file_ext = os.path.splitext(translated_path)
+                        if not file_ext[-1]:
+                            continue
+                        non_available_deps.append(translated_path)
 
         deps_retrieved = list()
         if non_available_deps:
@@ -237,23 +164,21 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
                 get_deps, recursive = self._show_get_deps_dialog(deps=non_available_deps)
             if get_deps:
                 if recursive:
-                    for non_available_dep in non_available_deps:
-                        deps = self.get_dependencies(
-                            non_available_dep, recursive=recursive, update_paths=False, show_dialogs=show_dialogs)
-                        if deps:
-                            deps_retrieved.append(deps)
-                        else:
-                            deps_retrieved.append({non_available_dep: []})
+                    deps = self.get_dependencies(
+                        non_available_deps, recursive=recursive, update_paths=False, show_dialogs=show_dialogs)
+                    for parent_path, dependencies_files in deps.items():
+                        deps_retrieved.append({parent_path: dependencies_files})
                 else:
                     deps_retrieved = list()
-                    self._download_files(non_available_deps, show_dialogs=show_dialogs)
+                    dcc_downloader = downloader.Downloader()
+                    dcc_downloader.download(non_available_deps, show_dialogs=show_dialogs)
                     for non_available_dep in non_available_deps:
                         deps_retrieved.append({non_available_dep: []})
 
         if show_dialogs:
             self._show_get_deps_result_dialog(deps_retrieved)
 
-        return non_available_deps
+        return deps_retrieved
 
     def _show_get_deps_dialog(self, deps):
         """
@@ -262,8 +187,6 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
         :param deps: List of dependencies files that are missing
         :return: True if the user acceps the operation; False otherwise
         """
-
-        from artella.plugins.getdependencies.widgets import listdialog
 
         deps_dialog = listdialog.DependenciesListDialog()
         title = 'Artella - Missing dependency' if len(deps) <= 1 else 'Artella - Missing dependencies'
@@ -277,65 +200,102 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
         if not deps_list:
             return
 
-        from artella.plugins.getdependencies.widgets import outputdialog
-
         deps_dialog = outputdialog.DependenciesOutputDialog()
         for dep in deps_list:
             for dep_parent_path, dep_paths in dep.items():
                 if dep_paths:
                     for dep_path in dep_paths:
-                            deps_dialog.add_dependency(dep_path, dep_parent_path)
+                        deps_dialog.add_dependency(dep_path, dep_parent_path)
                 else:
                     deps_dialog.add_dependency(dep_parent_path, None)
         deps_dialog.show()
 
-    def _download_files(self, files_to_download, show_dialogs=True):
+    def _get_dependencies(self, dependency_files, dependencies_, show_dialogs=True, recursive=True):
+        files_to_download = list()
+        parent_maps = dict()
+        for parent_path, dependencies in dependency_files.items():
+            dependencies_.setdefault(parent_path, list())
+            for dependency_file in dependencies:
+                dependency_file = utils.clean_path(dependency_file)
+                local_path = api.translate_path(dependency_file)
+                if not os.path.isfile(local_path):
+                    files_to_download.append(local_path)
+                    parent_maps[local_path] = parent_path
+                else:
+                    is_latest_version = api.file_is_latest_version(local_path)
+                    if not is_latest_version:
+                        files_to_download.append(local_path)
+                        parent_maps[local_path] = parent_path
+                    else:
+                        dependencies_[parent_path].append(local_path)
+        if files_to_download:
+            dcc_downloader = downloader.Downloader()
+            dcc_downloader.download(files_to_download, show_dialogs=show_dialogs)
 
-        artella_drive_client = dccplugin.DccPlugin().get_client()
-        if not artella_drive_client or not artella_drive_client.check(update=True):
-            return
+        files_to_parse = list()
+        for downloaded_file in files_to_download:
+            parent_path = parent_maps[downloaded_file]
+            dependencies_[parent_path].append(downloaded_file)
+            if not os.path.isfile(downloaded_file):
+                continue
+            file_ext = os.path.splitext(os.path.basename(downloaded_file))[-1]
+            if file_ext not in dcc.extensions():
+                continue
+            files_to_parse.append(downloaded_file)
 
-        artella_drive_client.download(files_to_download)
+        if files_to_parse and recursive:
+            dcc_parser = parser.Parser()
+            deps_file_paths = dcc_parser.parse(files_to_parse, show_dialogs=show_dialogs) or dict()
+            if deps_file_paths:
+                self._get_dependencies(deps_file_paths, dependencies_, show_dialogs=show_dialogs)
 
-        # We force the waiting to a high value, otherwise Artella Drive Client will return that no download
-        # is being processed
-        time.sleep(1.0)
+    def _get_path_from_udim(self, dep_file_path):
 
-        valid_download = True
-        dcc_progress_bar = None
-        if show_dialogs:
-            if qtutils.QT_AVAILABLE:
-                dcc_progress_bar = splash.ProgressSplashDialog()
+        remote_path_files = dict()
+
+        udim_dependencies = list()
+
+        folder_directory = os.path.dirname(dep_file_path)
+        dep_file_name, dep_file_ext = os.path.splitext(os.path.basename(dep_file_path))
+        dep_file_parts = dep_file_name.split('_')
+        if folder_directory not in remote_path_files:
+            directory_info = api.file_status(folder_directory, include_remote=True) or None
+            if not directory_info:
+                remote_path_files[folder_directory] = list()
             else:
-                dcc_progress_bar = dcc_progress.ProgressBar()
-            dcc_progress_bar.start()
+                directory_info = directory_info[0]
+                for handle, data in directory_info.items():
+                    remote_info = data.get('remote_info', dict())
+                    remote_path_files.setdefault(folder_directory, list())
+                    is_file = remote_info.get('raw', dict()).get('type', None) == 'file'
+                    name = remote_info.get('name', None)
+                    if is_file and name:
+                        remote_path_files[folder_directory].append(name)
+        if folder_directory in remote_path_files:
+            for directory_path, file_names in remote_path_files.items():
+                if not file_names:
+                    continue
+                for file_name in file_names:
+                    valid = True
+                    file_parts = file_name.split('_')
+                    for dep_part, file_part in zip(dep_file_parts, file_parts):
+                        if dep_part == '<UDIM>':
+                            continue
+                        if dep_part != file_part:
+                            valid = False
+                            break
+                    if valid:
+                        udim_file_path = os.path.join(directory_path, file_name)
+                        translated_path = api.translate_path(udim_file_path)
+                        if translated_path and not os.path.isfile(translated_path):
+                            if os.path.isdir(translated_path):
+                                continue
+                            file_ext = os.path.splitext(translated_path)
+                            if not file_ext[-1]:
+                                continue
+                            udim_dependencies.append(translated_path)
 
-        while True:
-            if show_dialogs and dcc_progress_bar.is_cancelled():
-                artella_drive_client.pause_downloads()
-                valid_download = False
-                break
-            progress, fd, ft, bd, bt = artella_drive_client.get_progress()
-            progress_status = '{} of {} KiB downloaded\n{} of {} files downloaded'.format(
-                int(bd / 1024), int(bt / 1024), fd, ft)
-            if show_dialogs:
-                dcc_progress_bar.set_progress_value(value=progress, status=progress_status)
-            if progress >= 100 or bd == bt:
-                break
-
-        total_checks = 0
-        if valid_download:
-            missing_file = False
-            for local_file_path in files_to_download:
-                if not os.path.exists(local_file_path):
-                    missing_file = True
-                    break
-            while missing_file and total_checks < 5:
-                time.sleep(1.0)
-                total_checks += 1
-
-        if show_dialogs:
-            dcc_progress_bar.end()
+        return udim_dependencies
 
     def _post_get_dependencies(self, **kwargs):
         """
