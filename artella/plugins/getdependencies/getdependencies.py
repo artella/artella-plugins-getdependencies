@@ -245,7 +245,11 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
 
         if files_to_parse and recursive:
             dcc_parser = parser.Parser()
-            deps_file_paths = dcc_parser.parse(files_to_parse, show_dialogs=show_dialogs) or dict()
+            if dcc.is_maya():
+                deps_file_paths = dcc_parser.parse(
+                    files_to_parse, show_dialogs=show_dialogs, force_mayapy_parser=True) or dict()
+            else:
+                deps_file_paths = dcc_parser.parse(files_to_parse, show_dialogs=show_dialogs) or dict()
             if deps_file_paths:
                 self._get_dependencies(deps_file_paths, dependencies_, show_dialogs=show_dialogs)
 
