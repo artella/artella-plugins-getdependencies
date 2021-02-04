@@ -12,7 +12,7 @@ import logging
 
 from artella import dcc, api
 from artella.core.dcc import parser
-from artella.core import plugin, utils, downloader
+from artella.core import plugin, qtutils, utils, downloader
 from artella.plugins.getdependencies.widgets import listdialog, outputdialog
 
 logger = logging.getLogger('artella')
@@ -124,7 +124,11 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
         if not self.is_loaded():
             return non_available_deps
 
-        if not api.is_client_available():
+        if not api.is_client_available(update=True):
+            msg = 'Local Artella Drive is not available. Please launch Artella Drive App.'
+            if show_dialogs:
+                api.show_warning_message(msg, title='Impossible to Get Dependencies')
+            logger.warning('Local Artella Drive is not available. Please launch Artella Drive App.')
             return non_available_deps
 
         if not file_path:
