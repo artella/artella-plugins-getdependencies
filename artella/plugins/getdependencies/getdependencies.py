@@ -12,7 +12,7 @@ import logging
 
 from artella import dcc, api
 from artella.core.dcc import parser
-from artella.core import plugin, qtutils, utils, downloader
+from artella.core import plugin, utils, downloader
 from artella.plugins.getdependencies.widgets import listdialog, outputdialog
 
 logger = logging.getLogger('artella')
@@ -160,6 +160,17 @@ class GetDependenciesPlugin(plugin.ArtellaPlugin, object):
 
         deps_retrieved = list()
         if non_available_deps:
+
+            clean_non_available_deps = list()
+            for dep in non_available_deps:
+                if not dep:
+                    continue
+                if isinstance(dep, (list, tuple)):
+                    clean_non_available_deps.extend(dep)
+                else:
+                    clean_non_available_deps.append(dep)
+            non_available_deps = list(tuple(clean_non_available_deps))
+
             api.show_info_message(
                 '{} Missing dependencies found.'.format(len(non_available_deps)), title='Artella - Get Dependencies')
             get_deps = True
